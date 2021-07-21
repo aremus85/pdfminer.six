@@ -4,7 +4,9 @@ output it to plain text, html, xml or tags."""
 import argparse
 import logging
 import sys
+import os
 
+sys.path.append(os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "/.."))
 import pdfminer.high_level
 import pdfminer.layout
 
@@ -61,10 +63,13 @@ def extract_text(files=[], outfile='-',
     else:
         outfp = open(outfile, "wb")
 
+    info = None
     for fname in files:
         with open(fname, "rb") as fp:
-            pdfminer.high_level.extract_text_to_fp(fp, **locals())
-    return outfp
+            res = pdfminer.high_level.extract_text_to_fp(fp, **locals())
+            if not info:
+                info = res
+    return (outfp, res)
 
 
 def maketheparser():
@@ -195,9 +200,97 @@ def main(args=None):
             if A.outfile.endswith(override):
                 A.output_type = alttype
 
-    outfp = extract_text(**vars(A))
+    res = extract_text(**vars(A))
+    (outfp, info) = res
     outfp.close()
+    from xml.etree import ElementTree as etree
+    document = etree.parse(outfp.name)
+    #document = etree.parse( '/home/nulysses/Downloads/pdf_test/pdf_extract/2021-07-21_11-39-07/Bomito-1315137 - Strato AG.pdf.xml')
+    root = document.getroot()
+    elem1 = etree.Element('Document')
+    elem1.text = '\n'
+    elem1.tail = '\n'
+    elem2 = etree.SubElement(elem1, 'DocInfo')
+    elem2.text = '\n'
+    elem2.tail = '\n'
+    title = etree.SubElement(elem2, 'Title')
+    title.text = ''
+    if 'Title' in info:
+        title.text = decode(info['Title'])
+    title.tail = '\n'
+    producer = etree.SubElement(elem2, 'Producer')
+    producer.text = ''
+    if 'Producer' in info:
+        producer.text = decode(info['Producer'])
+    producer.tail = '\n'
+    creator = etree.SubElement(elem2, 'Creator')
+    creator.text = ''
+    if 'Creator' in info:
+        creator.text = decode(info['Creator'])
+    creator.tail = '\n'
+    creation_date = etree.SubElement(elem2, 'CreationDate')
+    creation_date.text = ''
+    if 'CreationDate' in info:
+        creation_date.text = decode(info['CreationDate'])
+    creation_date.tail = '\n'
+    root.insert(0, elem1)
+    for page in root:
+        words = page.findall('word')
+        for word in words:
+            page.remove(word)
+        texts = page.findall('text')
+        for text in texts:
+            page.remove(text)
+        if words:
+            page.extend(words)
+        if texts:
+            page.extend(texts)
+        figures = page.findall('figure')
+        for figure in figures:
+            words = figure.findall('word')
+            for word in words:
+                figure.remove(word)
+            texts = figure.findall('text')
+            for text in texts:
+                figure.remove(text)
+            if words:
+                figure.extend(words)
+            if texts:
+                figure.extend(texts)
+        textboxes = page.findall('textbox')
+        for textbox in textboxes:
+            textlines = textbox.findall('textline')
+            for textline in textlines:
+                words = textline.findall('word')
+                for word in words:
+                    textline.remove(word)
+                texts = textline.findall('text')
+                for text in texts:
+                    textline.remove(text)
+                if words:
+                    textline.extend(words)
+                if texts:
+                    textline.extend(texts)
+    document.write(outfp.name, short_empty_elements=False)
     return 0
+encodings = [
+    "utf-8",
+    "utf-8-sig",
+    "utf-16",
+    "cp1252",
+    "ascii"
+]
+def decode_helper(string):
+  for encoding in encodings:
+    try:
+      return [string.decode(encoding), encoding]
+    except UnicodeDecodeError:
+      pass
+
+def decode(string):
+  ret = decode_helper(string)
+  ret = str(ret[0].encode("utf-8"), "utf-8")
+  return ret
 
 
 if __name__ == '__main__':

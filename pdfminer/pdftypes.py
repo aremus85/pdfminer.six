@@ -190,7 +190,7 @@ class PDFStream(PDFObject):
     def __init__(self, attrs, rawdata, decipher=None):
         assert isinstance(attrs, dict), str(type(attrs))
         self.attrs = attrs
-        self.rawdata = rawdata
+        self.rawdata = rawdata.strip()
         self.decipher = decipher
         self.data = None
         self.objid = None

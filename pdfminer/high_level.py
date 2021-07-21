@@ -76,15 +76,20 @@ def extract_text_to_fp(inf, outfp, output_type='text', codec='utf-8',
         device = TagExtractor(rsrcmgr, outfp, codec=codec)
 
     interpreter = PDFPageInterpreter(rsrcmgr, device)
+    info = None
     for page in PDFPage.get_pages(inf,
                                   page_numbers,
                                   maxpages=maxpages,
                                   password=password,
-                                  caching=not disable_caching):
+                                  caching=not disable_caching
+    ):
+        if not info:
+            info = page.doc.info[0]
         page.rotate = (page.rotate + rotation) % 360
         interpreter.process_page(page)
 
     device.close()
+    return info
 
 
 def extract_text(pdf_file, password='', page_numbers=None, maxpages=0,

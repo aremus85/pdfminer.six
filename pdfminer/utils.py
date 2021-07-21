@@ -283,7 +283,7 @@ def decode_text(s):
 
 def enc(x):
     """Encodes a string for SGML/XML/HTML"""
-    if isinstance(x, bytes):
+    if isinstance(x, bytes) or x is None:
         return ''
     return escape(x)
 

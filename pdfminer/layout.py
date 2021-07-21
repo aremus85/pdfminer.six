@@ -345,6 +345,9 @@ class LTContainer(LTComponent):
     def __iter__(self):
         return iter(self._objs)
 
+    def __getitem__(self, key):
+        return self._objs[key]
+
     def __len__(self):
         return len(self._objs)
 

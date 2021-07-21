@@ -13,6 +13,7 @@ from .layout import LTCurve
 from .layout import LTFigure
 from .layout import LTImage
 from .layout import LTChar
+from .layout import LTAnno
 from .layout import LTTextLine
 from .layout import LTTextBox
 from .layout import LTTextBoxVertical
@@ -499,6 +500,11 @@ class XMLConverter(PDFConverter):
         return
 
     def receive_layout(self, ltpage):
+        first_char = None
+        last_char = None
+        last_word = ''
+        # Offset in pixel to consider a char part of a new word
+        char_offset = 1
         def show_group(item):
             if isinstance(item, LTTextBox):
                 self.write('<textbox id="%d" bbox="%s" />\n' %
@@ -511,6 +517,10 @@ class XMLConverter(PDFConverter):
             return
 
         def render(item):
+            nonlocal first_char
+            nonlocal last_char
+            nonlocal last_word
+            nonlocal char_offset
             if isinstance(item, LTPage):
                 s = '<page id="%s" bbox="%s" rotate="%d">\n' % \
                     (item.pageid, bbox2str(item.bbox), item.rotate)
@@ -544,7 +554,8 @@ class XMLConverter(PDFConverter):
                 self.write('</figure>\n')
             elif isinstance(item, LTTextLine):
                 self.write('<textline bbox="%s">\n' % bbox2str(item.bbox))
-                for child in item:
+                for idx in range(len(item)):
+                    child = item[idx]
                     render(child)
                 self.write('</textline>\n')
             elif isinstance(item, LTTextBox):
@@ -563,18 +574,68 @@ class XMLConverter(PDFConverter):
                     (enc(item.fontname), bbox2str(item.bbox),
                      item.ncs.name, item.graphicstate.ncolor, item.size)
                 self.write(s)
-                self.write_text(item.get_text())
+                text = item.get_text()
+                self.write_text(text)
                 self.write('</text>\n')
+                new_word = 0
+                if last_word == '761':
+                    f=3
+                if last_char is not None:
+                    h1=item.bbox[0]
+                    h2=(last_char.bbox[0] + last_char.width + (last_char.width * 0.3))
+                    if last_char.fontname != item.fontname:
+                        new_word = 1
+                    elif last_char.ncs.name != item.ncs.name:
+                        new_word = 1
+                    elif last_char.graphicstate.ncolor != item.graphicstate.ncolor:
+                        new_word = 1
+                    elif last_char.size != item.size:
+                        new_word = 1
+                    elif last_char.bbox[1] != item.bbox[1]:
+                        new_word = 1
+                    elif (item.bbox[0]) > (last_char.bbox[0] + last_char.width + (last_char.width * 0.3)):
+                        new_word = 1
+                    elif text == ' ':
+                        new_word = 1
+                elif not isinstance(item, LTAnno):
+                    last_char = item
+                if first_char is None:
+                    first_char = item
+                if new_word:
+                    word_striped = last_word.strip()
+                    if word_striped != '':
+                        self.write('<word font="%s" bbox="%s" colourspace="%s" ' \
+                                   'ncolour="%s" size="%.3f">' % \
+                                   (enc(last_char.fontname), '{:.3f}'.format(first_char.bbox[0]) + ','
+                                    + '{:.3f}'.format(first_char.bbox[1]) + ','
+                                    + '{:.3f}'.format(last_char.bbox[2]) + ',' + '{:.3f}'.format(last_char.bbox[3]),
+                                    last_char.ncs.name, last_char.graphicstate.ncolor, last_char.size))
+                        text_final = enc(last_word.strip())
+                        if text_final == "761":
+                            d=7
+                        self.write(text_final)
+                        self.write('</word>\n')
+                    last_word = text
+                    first_char = None
+                else:
+                    if text != '':
+                        last_word += text
+                last_char = item
             elif isinstance(item, LTText):
-                self.write('<text>%s</text>\n' % item.get_text())
+                text = item.get_text()
+                self.write('<text>%s</text>\n' % text)
             elif isinstance(item, LTImage):
+                import hashlib
+                md5_hash = hashlib.md5()
+                md5_hash.update(item.stream.rawdata)
+                digest = md5_hash.hexdigest()
                 if self.imagewriter is not None:
                     name = self.imagewriter.export_image(item)
-                    self.write('<image src="%s" width="%d" height="%d" />\n' %
-                               (enc(name), item.width, item.height))
+                    self.write('<image hash="%s" src="%s" width="%d" height="%d" />\n' %
+                               (digest, enc(name), item.width, item.height))
                 else:
-                    self.write('<image width="%d" height="%d" />\n' %
-                               (item.width, item.height))
+                    self.write('<image hash="%s" width="%d" height="%d" />\n' %
+                               (digest, item.width, item.height))
             else:
                 assert False, str(('Unhandled', item))
             return
