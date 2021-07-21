@@ -66,6 +66,7 @@ def extract_text(files=[], outfile='-',
     info = None
     for fname in files:
         with open(fname, "rb") as fp:
+            print(fname)
             res = pdfminer.high_level.extract_text_to_fp(fp, **locals())
             if not info:
                 info = res
@@ -201,9 +202,11 @@ def main(args=None):
                 A.output_type = alttype
 
     res = extract_text(**vars(A))
+    print(res)
     (outfp, info) = res
     outfp.close()
     from xml.etree import ElementTree as etree
+    print(outfp.name)
     document = etree.parse(outfp.name)
     #document = etree.parse( '/home/nulysses/Downloads/pdf_test/pdf_extract/2021-07-21_11-39-07/Bomito-1315137 - Strato AG.pdf.xml')
     root = document.getroot()
